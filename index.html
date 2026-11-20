@@ -1,4 +1,4 @@
-<!doctype html><html lang="vi"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover"><style>:root{color-scheme:light;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}body{margin:0;font:14px system-ui,sans-serif}img{max-width:100%}[hidden]{display:none!important}</style></head><body>
+<!doctype html><html lang="vi"><head><meta charset="utf-8"><meta name="referrer" content="no-referrer"><meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover"><style>:root{color-scheme:light;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}body{margin:0;font:14px system-ui,sans-serif}img{max-width:100%}[hidden]{display:none!important}</style></head><body>
 <title>Tự học Tiếng Trung</title>
 <meta name="claude:viewport-fit-sides" content="cover">
 <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -584,13 +584,13 @@ const I={
  check:'<svg viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12.5l4.5 4.5L19 7.5"/></svg>',
  search:'<svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="11" cy="11" r="7"/><path d="M20 20l-4-4"/></svg>'
 };
-const canSpeak=("speechSynthesis" in window)&&typeof SpeechSynthesisUtterance!=="undefined";
+const canSpeak=(("speechSynthesis" in window)&&typeof SpeechSynthesisUtterance!=="undefined")||typeof Audio!=="undefined";
 /* Hai giọng đọc: chọn giọng nam / nữ có sẵn trên máy theo tên giọng; thiếu thì giả lập bằng cao độ */
 const FEM=/huihui|yaoyao|xiaoxiao|xiaoyi|xiaohan|xiaomo|xiaochen|tingting|yu-shu|meijia|sinji|hanhan|female|google/i;
 const MAL=/kangkang|yunxi|yunjian|yunyang|yunfeng|yunhao|yunze|li-mu|\bmale\b/i;
 const VO={m:null,f:null,mFake:false,fFake:false};
 function pickVoices(){
- if(!canSpeak)return;let vs=[];try{vs=speechSynthesis.getVoices().filter(v=>/^(zh|cmn)/i.test(v.lang))}catch(e){}
+ if(!canSpeak)return;let vs=[];if(!("speechSynthesis" in window)){const el=document.getElementById("vinfo");if(el)el.innerHTML=voiceInfo();return}try{vs=speechSynthesis.getVoices().filter(v=>/^(zh|cmn)/i.test(v.lang))}catch(e){}
  const sc=v=>(/(zh|cmn)[-_](CN|Hans)/i.test(v.lang)?2:/zh/i.test(v.lang)?1:0)+(/natural|online|neural/i.test(v.name)?3:0);
  vs.sort((a,b)=>sc(b)-sc(a));
  VO.f=vs.find(v=>FEM.test(v.name)&&!/\bmale\b/i.test(v.name))||null;
@@ -608,17 +608,33 @@ function pickVoices(){
  const el=document.getElementById("vinfo");if(el)el.innerHTML=voiceInfo();
 }
 const ZH_NOVOICE="Máy chưa có giọng đọc tiếng Trung. Cách nhanh nhất: mở trang bằng Edge (có sẵn giọng Xiaoxiao, Yunxi) hoặc điện thoại. Trên Windows: Cài đặt → Thời gian và ngôn ngữ → Giọng nói → Thêm giọng → Tiếng Trung (giản thể).";
-function voiceInfo(){if(canSpeak&&!VO.m&&!VO.f&&speechSynthesis.getVoices().length)return ZH_NOVOICE;
+function voiceInfo(){if(needNet())return"Giọng đọc: 👨 👩 đọc qua mạng (Google), cần Internet. Muốn đọc không cần mạng: mở bằng Edge (có Xiaoxiao, Yunxi) hoặc thêm giọng Tiếng Trung (giản thể) trong Cài đặt Windows → Thời gian và ngôn ngữ → Giọng nói.";
  if(!canSpeak)return"Trình duyệt này không hỗ trợ đọc tiếng Trung. Hãy mở bằng Chrome hoặc Edge.";
  const n=(v,fake)=>v?esc(v.name.replace(/^Microsoft |^Google /,"").replace(/ - English.*$/,""))+(fake?" (giả lập)":""):"giọng mặc định";
  return"Giọng đọc: 👨 "+n(VO.m,VO.mFake)+" · 👩 "+n(VO.f,VO.fFake);
 }
+/* Giọng dự phòng: máy không có giọng tiếng Trung thì đọc qua mạng (Google), nam = hạ cao độ */
+const NET={a:null,on:false};
+function netChunks(t){const out=[];String(t).split(/(?<=[，。！？；：、,.!?;:])/).forEach(p=>{p=p.trim();if(!p)return;while(p.length>150){out.push(p.slice(0,150));p=p.slice(150)}const l=out.length-1;if(l>=0&&out[l].length+p.length<=150&&!/[。！？.!?]$/.test(out[l]))out[l]+=p;else out.push(p)});return out}
+function netStop(){if(NET.a){try{NET.a.pause()}catch(e){}NET.a=null}}
+function netSay(parts,run,done){
+ let i=0;const next=()=>{if(run!==speakRun){netStop();return}if(i>=parts.length){NET.a=null;done();return}
+  const [g,t]=parts[i++],a=new Audio("https://translate.google.com/translate_tts?ie=UTF-8&client=tw-ob&tl=zh-CN&q="+encodeURIComponent(t));NET.a=a;
+  a.preservesPitch=false;a.mozPreservesPitch=false;a.webkitPreservesPitch=false;
+  a.playbackRate=g==="m"?(S.slow?.68:.86):(S.slow?.78:1);
+  a.onended=()=>{speakTimer=setTimeout(next,g==="m"?300:150)};
+  a.onerror=()=>{NET.a=null;done();if(!NET.warned){NET.warned=true;toast("Không tải được giọng đọc qua mạng. Kiểm tra kết nối Internet. "+ZH_NOVOICE)}};
+  const p=a.play();if(p&&p.catch)p.catch(()=>a.onerror())};
+ next();
+}
+function needNet(){return !VO.m&&!VO.f}
 let playingBtn=null,speakRun=0,speakTimer=null;
 /* Giọng nam đọc theo từng cụm, nghỉ ngắn sau dấu phẩy và giữa các câu, nghe như vừa nghĩ vừa nói */
 function speakChunks(t){return t.split(/(?<=[,;:—，；：、])\s*|(?<=[.!?。！？])\s*/).map(s=>s.trim()).filter(Boolean)}
 function speak(t,g,btn){if(!canSpeak)return;g=g==="m"?"m":"f";try{
- speechSynthesis.cancel();clearTimeout(speakTimer);if(playingBtn)playingBtn.classList.remove("playing");
- const run=++speakRun,v=g==="m"?VO.m:VO.f;if(!v&&!window.zhWarned&&speechSynthesis.getVoices().length){window.zhWarned=true;toast(ZH_NOVOICE)}
+ try{speechSynthesis.cancel()}catch(e){}netStop();netStop();clearTimeout(speakTimer);if(playingBtn)playingBtn.classList.remove("playing");
+ const run=++speakRun,v=g==="m"?VO.m:VO.f;
+ if(needNet()){if(btn){playingBtn=btn;btn.classList.add("playing")}netSay(netChunks(t).map(x=>[g,x]),run,()=>{if(btn)btn.classList.remove("playing")});return}
  const parts=g==="m"?speakChunks(t):[t];
  const done=()=>{if(btn)btn.classList.remove("playing")};
  if(btn){playingBtn=btn;btn.classList.add("playing")}
@@ -940,7 +956,7 @@ function micUI(){trMicUI();renderHCMics()}
 function trMicUI(){document.querySelectorAll('[data-act="tr-mic"]').forEach(b=>{const on=VS&&VS.owner==="tr"&&VS.lang===b.dataset.l;b.classList.toggle("pri",!!on);b.lastChild.textContent=on?" Đang nghe… bấm để dừng":(b.dataset.l==="vi"?" Nói tiếng Việt":" Nói tiếng Trung")})}
 function trMic(lang){
  if(VS){voiceStop();return}
- try{speechSynthesis.cancel()}catch(e){}
+ try{speechSynthesis.cancel()}catch(e){}netStop();
  const base=S.trText.trim()?S.trText.trim()+" ":"";let acc="";
  const sync=()=>{const ta=$("#trIn");if(ta)ta.value=S.trText;renderTrSide()};
  voiceStart({lang,owner:"tr",
@@ -1008,7 +1024,7 @@ async function hcAdd(text,from){
 }
 function hcMic(from){
  if(VS){voiceStop();return}
- try{speechSynthesis.cancel()}catch(e){}
+ try{speechSynthesis.cancel()}catch(e){}netStop();
  let acc="";const live=t=>{const l=$("#hcLive");if(l)l.textContent=t};
  voiceStart({lang:from,owner:"hc",
   onPartial:t=>live((acc+" "+t).trim()),
@@ -1854,8 +1870,9 @@ function vocabTotal(){const s=new Set();NG.forEach(ng=>words(ng,-1).forEach(w=>s
 let KN={mode:"gram",i:-1},KQ=null,knTimer=null,knT0=0;
 function knQs(arr){return arr.map(x=>{const m=toMix(x[1],x[2]);return{q:x[0],opts:m.opts,ans:m.ans,ex:x[3]}})}
 function playDialog(lines,btn){
- if(!canSpeak)return;try{speechSynthesis.cancel()}catch(e){}clearTimeout(speakTimer);const run=++speakRun;let i=0;
+ if(!canSpeak)return;try{speechSynthesis.cancel()}catch(e){}netStop();netStop();clearTimeout(speakTimer);const run=++speakRun;let i=0;
  if(btn){playingBtn=btn;btn.classList.add("playing")}
+ if(needNet()){netSay(lines.flatMap(l=>netChunks(l[1]).map(x=>[l[0],x])),run,()=>{if(btn)btn.classList.remove("playing")});return}
  const next=()=>{if(run!==speakRun)return;if(i>=lines.length){if(btn)btn.classList.remove("playing");return}
   const [g,t]=lines[i++],u=new SpeechSynthesisUtterance(t),v=g==="m"?VO.m:VO.f;if(v){u.voice=v;u.lang=v.lang}else u.lang="zh-CN";
   u.rate=S.slow?.75:.92;u.pitch=g==="m"?(VO.mFake?.5:.7):(VO.fFake?1.35:1);
@@ -1981,7 +1998,7 @@ document.addEventListener("click",e=>{
  if(act==="kn-ai"){const w=WR[KN.i],t=(S.wr[w.id]||"").trim();if(!t){toast("Hãy viết bài trước");return}copyText("Bạn là giám khảo "+"HSK"+". Hãy chấm bài viết dưới đây"+(w.id.startsWith("ielts")?" theo 4 tiêu chí IELTS (Task Achievement/Response, Coherence and Cohesion, Lexical Resource, Grammatical Range and Accuracy), cho band ước lượng":"")+", chỉ ra lỗi ngữ pháp và từ vựng kèm cách sửa, rồi viết lại một bản tốt hơn. Giải thích bằng tiếng Việt.\n\nĐề bài:\n"+w.task+"\n\nBài viết:\n"+t,"Đã chép câu lệnh. Dán vào ChatGPT, Claude hoặc gửi giáo viên.");return}
  if(act==="fx-start"){fxBuild();renderTO();window.scrollTo(0,0);fxPlay();return}
  if(act==="fx-ans"){const no=+b.dataset.no,j=+b.dataset.j;FX.ans[no]=j;FX.armSubmit=false;document.querySelectorAll('[data-act="fx-ans"][data-no="'+no+'"]').forEach(x=>x.classList.toggle("sel",+x.dataset.j===j));const c=document.querySelector("#v-toeic .count");if(c)c.textContent="Đã làm "+Object.keys(FX.ans).length+"/200 câu";return}
- if(act==="fx-next"||act==="fx-prev"||act==="fx-go"){FX.i=act==="fx-go"?+b.dataset.i:Math.max(0,Math.min(FX.sets.length-1,FX.i+(act==="fx-next"?1:-1)));FX.armSubmit=false;try{speechSynthesis.cancel()}catch(e){}renderTO();window.scrollTo(0,0);if(FX.sets[FX.i].part<=4)fxPlay();return}
+ if(act==="fx-next"||act==="fx-prev"||act==="fx-go"){FX.i=act==="fx-go"?+b.dataset.i:Math.max(0,Math.min(FX.sets.length-1,FX.i+(act==="fx-next"?1:-1)));FX.armSubmit=false;try{speechSynthesis.cancel()}catch(e){}netStop();renderTO();window.scrollTo(0,0);if(FX.sets[FX.i].part<=4)fxPlay();return}
  if(act==="fx-play"){fxPlay(b);return}
  if(act==="fx-script"){FX.script=!FX.script;renderTO();return}
  if(act==="fx-submit"){if(!FX.armSubmit){FX.armSubmit=true;renderTO();return}fxFinish();window.scrollTo(0,0);return}
